@@ -3,6 +3,20 @@
     Copyright (C) 2011 InvenSense Corporation, All Rights Reserved.
  $
  */
+/**
+ * @file    dmpKey.h
+ * @brief   MPU6050 DMP 固件的"参数键"索引表（InvenSense 官方定义）。
+ *
+ * DMP 是一颗运行在 MPU6050 内部的协处理器，官方固件把可调参数存放在 DMP 内存中。
+ * 上层（inv_mpu_dmp_motion_driver.c）不能直接用地址访问这些参数，而是用这里的
+ * KEY_xxx 逻辑编号，经 dmp_set_* 函数转换为实际地址后写入。
+ *
+ * 注意：
+ *   1. 这些宏是"依次加 1"的连续编号，顺序由官方固件规定，不可增删或重排；
+ *      一旦改动，后续所有键值都会错位，导致写入错误的 DMP 参数。
+ *   2. DINxxx 系列是 DMP 内存地址别名，仅在调试/固件加载时使用。
+ *   3. 本文件由厂商提供，通常不需要修改。
+ */
 #ifndef DMPKEY_H__
 #define DMPKEY_H__
 

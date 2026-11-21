@@ -1,3 +1,14 @@
+/*
+ * 【中文导读】system_stm32f4xx.c —— CMSIS 系统初始化（STM32CubeMX/CMSIS 生成）
+ * ----------------------------------------------------------------------------
+ * 本文件由 ST 官方模板生成，负责 SystemInit()（复位后、进 main 前由启动文件调用）
+ * 与 SystemCoreClockUpdate()（时钟树变化后刷新 SystemCoreClock）。
+ *
+ * 警告：除非更换晶振/时钟树，否则不要手改本文件；
+ *       本工程的时钟配置实际在 Core/Src/main.c 的 SystemClock_Config() 里，
+ *       两者不一致会导致 SysTick 与串口波特率全部偏移。
+ * 阅读时只需关注 SystemCoreClock 的最终值（本工程 100 MHz）与 VECT_TAB_OFFSET。
+ */
 /**
   ******************************************************************************
   * @file    system_stm32f4xx.c

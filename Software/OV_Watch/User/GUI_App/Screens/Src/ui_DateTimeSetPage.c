@@ -4,8 +4,28 @@
 #include "../Inc/ui_SetPage.h"
 #include "../Inc/ui_DateTimeSetPage.h"
 #include "../../../Func/Inc/HWDataAccess.h"
+/*
+ * 【中文导读】ui_DateTimeSetPage.c —— 日期/时间设置（一个文件装 3 个页面）
+ * ----------------------------------------------------------------------------
+ * 三个 Page_t 共用一个 .c：
+ *   Page_DateTimeSet  入口页：同步 APP 开关 + “日期设置” + “时间设置”两行
+ *   Page_DateSet      日期页：年/月/日三个 roller + 底部 OK
+ *   Page_TimeSet      时间页：时/分/秒三个 roller + 两个冒号 + OK
+ * 
+ * 数据流：进子页时先读一次 RTC 作为 roller 初值；点 OK 时把 roller 的选中
+ * 索引换算成 Y/M/D 或 H/M/S，调 HWInterface.RealTimeClock.SetDate/SetTime 写回
+ * RTC，同时更新首页用的全局缓存（ui_DateMonthValue 等），最后 Page_Back()。
+ * 
+ * 两个换算细节：
+ *   年份 roller 是 2022~2035 的字符串表，RTC 存的是 0~99，故 setyear=索引+22；
+ *   月/日 roller 从 1 开始，索引要 +1。
+ * 
+ * 已知问题（记录不改）：日 roller 固定用 day31options，day28/29/30 三张表
+ * 定义了却没用——2 月也能选到 31 日，写进 RTC 后日期非法。
+ */
 
 ///////////////////// Page Manager //////////////////
+// 三个页面各注册一个 Page_t；栈深度由 PageManager 统一限制
 Page_t Page_DateTimeSet = {ui_DateTimeSetPage_screen_init, ui_DateTimeSetPage_screen_deinit, &ui_DateTimeSetPage};
 Page_t Page_DateSet = {ui_DateSetPage_screen_init, ui_DateSetPage_screen_deinit, &ui_DateSetPage};
 Page_t Page_TimeSet = {ui_TimeSetPage_screen_init, ui_TimeSetPage_screen_deinit, &ui_TimeSetPage};
@@ -52,6 +72,11 @@ const char  day28options[] = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\
 const char  houroptions[] = "00\n01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23";
 const char  minoptions[] = "00\n01\n02\n03\n04\n05\n06\n07\n08\n09\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50\n51\n52\n53\n54\n55\n56\n57\n58\n59";
 ///////////////////// FUNCTIONS ////////////////////
+/**
+ * @brief 入口页手势：右滑返回设置页
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_DateTimeSetPage(lv_event_t * e)
 {
    lv_event_code_t event_code = lv_event_get_code(e);
@@ -69,6 +94,11 @@ void ui_event_DateTimeSetPage(lv_event_t * e)
 		}
 }
 
+/**
+ * @brief “日期设置”行：进入日期子页
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_DateSetPanel(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -81,6 +111,11 @@ void ui_event_DateSetPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief “时间设置”行：进入时间子页
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_TimeSetPanel(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -90,24 +125,39 @@ void ui_event_TimeSetPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 日期页 OK：把三个 roller 的索引换算成日期并写 RTC
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 写 RTC 后同步首页缓存与星期，然后 Page_Back 回入口页。
+ */
 void ui_event_DateSetOKButton(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
     if(event_code == LV_EVENT_CLICKED)
     {
+// 年份表从 2022 开始，索引 +22 得到 RTC 的两位年
 			uint8_t setyear = lv_roller_get_selected(ui_YearSetRoller)+22;
+// 月/日 roller 的 0 号是 1 月/1 日，索引 +1
 			uint8_t setmonth = lv_roller_get_selected(ui_MonthSetRoller)+1;
 			uint8_t setday = lv_roller_get_selected(ui_DaySetRoller)+1;
 
       HWInterface.RealTimeClock.SetDate(setyear, setmonth, setday);
 			ui_DateMonthValue = setmonth;
 			ui_DateDayValue = setday;
+// 星期不写 RTC（硬件不存星期），只算给首页显示用；世纪参数固定 20
 			ui_DataWeekdayValue =  HWInterface.RealTimeClock.CalculateWeekday(setyear,setmonth,setday,20);
 
 			Page_Back();
     }
 }
 
+/**
+ * @brief 时间页 OK：写 RTC 并同步首页的时间缓存
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 时/分/秒 roller 的索引恰好等于数值（00~23、00~59），无需偏移。
+ */
 void ui_event_TimeSetOKButton(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -124,6 +174,12 @@ void ui_event_TimeSetOKButton(lv_event_t * e)
     }
 }
 
+/**
+ * @brief “同步 APP”开关：只维护一个全局标志
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note ui_APPSy_EN 目前没有其它模块消费，属于预留开关。
+ */
 void ui_event_APPSySwitch(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -144,11 +200,17 @@ void ui_event_APPSySwitch(lv_event_t * e)
 }
 
 ///////////////////// SCREEN init ////////////////////
+/**
+ * @brief 创建入口页：同步开关 + 日期行 + 时间行
+ * @return 无
+ * @note 三行各 70 高；日期/时间行按下变灰，开关行不响应点击。
+ */
 void ui_DateTimeSetPage_screen_init(void)
 {
     ui_DateTimeSetPage = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_DateTimeSetPage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
+// 第 1 行：同步 APP 开关，右侧 55x25
     ui_APPSyPanel = lv_obj_create(ui_DateTimeSetPage);
     lv_obj_set_width(ui_APPSyPanel, 240);
     lv_obj_set_height(ui_APPSyPanel, 70);
@@ -163,6 +225,7 @@ void ui_DateTimeSetPage_screen_init(void)
     lv_obj_set_width(ui_APPSySwitch, 55);
     lv_obj_set_height(ui_APPSySwitch, 25);
     lv_obj_set_align(ui_APPSySwitch, LV_ALIGN_RIGHT_MID);
+// 按全局标志恢复开关外观
     if(ui_APPSy_EN)
     {lv_obj_add_state(ui_APPSySwitch, LV_STATE_CHECKED);}
 
@@ -175,6 +238,7 @@ void ui_DateTimeSetPage_screen_init(void)
     lv_label_set_text(ui_APPSyLabel, "同步APP");
     lv_obj_set_style_text_font(ui_APPSyLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 第 2 行：日期设置，右侧三个小圆点做装饰
     ui_DateSetPanel = lv_obj_create(ui_DateTimeSetPage);
     lv_obj_set_width(ui_DateSetPanel, 240);
     lv_obj_set_height(ui_DateSetPanel, 70);
@@ -225,6 +289,7 @@ void ui_DateTimeSetPage_screen_init(void)
     lv_label_set_text(ui_DateSetLabel3, ".");
     lv_obj_set_style_text_font(ui_DateSetLabel3, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 第 3 行：时间设置，装饰同上
     ui_TimeSetPanel = lv_obj_create(ui_DateTimeSetPage);
     lv_obj_set_width(ui_TimeSetPanel, 240);
     lv_obj_set_height(ui_TimeSetPanel, 70);
@@ -275,6 +340,7 @@ void ui_DateTimeSetPage_screen_init(void)
     lv_label_set_text(ui_TimeSetLabel3, ".");
     lv_obj_set_style_text_font(ui_TimeSetLabel3, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 事件绑定：页面手势 + 两个行点击 + 开关
 		lv_obj_add_event_cb(ui_DateTimeSetPage, ui_event_DateTimeSetPage, LV_EVENT_ALL, NULL);
 		lv_obj_add_event_cb(ui_DateSetPanel, ui_event_DateSetPanel, LV_EVENT_ALL, NULL);
 		lv_obj_add_event_cb(ui_TimeSetPanel, ui_event_TimeSetPanel, LV_EVENT_ALL, NULL);
@@ -283,15 +349,22 @@ void ui_DateTimeSetPage_screen_init(void)
 }
 
 
+/**
+ * @brief 创建日期设置页：年/月/日三个 roller + OK
+ * @return 无
+ * @note 先读 RTC 把 roller 拨到当前日期，避免用户每次都要从头滚。
+ */
 void ui_DateSetPage_screen_init(void)
 {
 
+// 读一次 RTC 作为三个 roller 的初值
     HW_DateTimeTypeDef datetime;
     HWInterface.RealTimeClock.GetTimeDate(&datetime);
 
     ui_DateSetPage = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_DateSetPage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
+// 年 roller：2022~2035，索引 = RTC 年 - 22
     ui_YearSetRoller = lv_roller_create(ui_DateSetPage);
     lv_roller_set_options(ui_YearSetRoller, yearoptions ,LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(ui_YearSetRoller, datetime.Year-22, LV_ANIM_OFF);
@@ -308,6 +381,7 @@ void ui_DateSetPage_screen_init(void)
     lv_obj_set_style_bg_opa(ui_YearSetRoller, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(ui_YearSetRoller, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 选中项用蓝色描边而不是填充，视觉上像“选中框”
     lv_obj_set_style_bg_color(ui_YearSetRoller, lv_color_hex(0xFFFFFF), LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_YearSetRoller, 0, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_color(ui_YearSetRoller, lv_color_hex(0x0064FF), LV_PART_SELECTED | LV_STATE_DEFAULT);
@@ -315,6 +389,7 @@ void ui_DateSetPage_screen_init(void)
     lv_obj_set_style_outline_width(ui_YearSetRoller, 2, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_YearSetRoller, 1, LV_PART_SELECTED | LV_STATE_DEFAULT);
 
+// 月 roller：1~12，索引 = 月 - 1
     ui_MonthSetRoller = lv_roller_create(ui_DateSetPage);
     lv_roller_set_options(ui_MonthSetRoller, monthoptions, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(ui_MonthSetRoller, datetime.Month-1, LV_ANIM_OFF);
@@ -338,6 +413,7 @@ void ui_DateSetPage_screen_init(void)
     lv_obj_set_style_outline_width(ui_MonthSetRoller, 2, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_MonthSetRoller, 1, LV_PART_SELECTED | LV_STATE_DEFAULT);
 
+// 日 roller：固定 31 天表（未按月份切换，见文件头）
     ui_DaySetRoller = lv_roller_create(ui_DateSetPage);
     lv_roller_set_options(ui_DaySetRoller, day31options, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(ui_DaySetRoller, datetime.Date-1, LV_ANIM_OFF);
@@ -361,6 +437,7 @@ void ui_DateSetPage_screen_init(void)
     lv_obj_set_style_outline_width(ui_DaySetRoller, 2, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_DaySetRoller, 1, LV_PART_SELECTED | LV_STATE_DEFAULT);
 
+// OK 按钮：240x50 贴底，按下反白
     ui_DateSetOKButton = lv_btn_create(ui_DateSetPage);
     lv_obj_set_width(ui_DateSetOKButton, 240);
     lv_obj_set_height(ui_DateSetOKButton, 50);
@@ -386,15 +463,22 @@ void ui_DateSetPage_screen_init(void)
 }
 
 
+/**
+ * @brief 创建时间设置页：时/分/秒三个 roller + 两个冒号 + OK
+ * @return 无
+ * @note 时与分用 Cuyuan38 大字，秒复用 minoptions（00~59）字符串表。
+ */
 void ui_TimeSetPage_screen_init(void)
 {
 
+// 读 RTC 初值
     HW_DateTimeTypeDef datetime;
     HWInterface.RealTimeClock.GetTimeDate(&datetime);
 
     ui_TimeSetPage = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_TimeSetPage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
+// 时 roller：00~23，索引即小时
     ui_HourSetRoller = lv_roller_create(ui_TimeSetPage);
     lv_roller_set_options(ui_HourSetRoller, houroptions, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(ui_HourSetRoller, datetime.Hours, LV_ANIM_OFF);
@@ -418,6 +502,7 @@ void ui_TimeSetPage_screen_init(void)
     lv_obj_set_style_outline_width(ui_HourSetRoller, 2, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_HourSetRoller, 1, LV_PART_SELECTED | LV_STATE_DEFAULT);
 
+// 时分之间的冒号
     ui_TimePoint = lv_label_create(ui_TimeSetPage);
     lv_obj_set_width(ui_TimePoint, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_TimePoint, LV_SIZE_CONTENT);    /// 1
@@ -427,6 +512,7 @@ void ui_TimeSetPage_screen_init(void)
     lv_label_set_text(ui_TimePoint, ":");
     lv_obj_set_style_text_font(ui_TimePoint, &ui_font_Cuyuan38, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 分 roller：00~59
     ui_MinSetRoller = lv_roller_create(ui_TimeSetPage);
     lv_roller_set_options(ui_MinSetRoller, minoptions, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(ui_MinSetRoller, datetime.Minutes, LV_ANIM_OFF);
@@ -448,6 +534,7 @@ void ui_TimeSetPage_screen_init(void)
     lv_obj_set_style_outline_width(ui_MinSetRoller, 2, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_MinSetRoller, 1, LV_PART_SELECTED | LV_STATE_DEFAULT);
 
+// 分秒之间的冒号
     ui_TimePoint1 = lv_label_create(ui_TimeSetPage);
     lv_obj_set_width(ui_TimePoint1, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_TimePoint1, LV_SIZE_CONTENT);    /// 1
@@ -457,6 +544,7 @@ void ui_TimeSetPage_screen_init(void)
     lv_label_set_text(ui_TimePoint1, ":");
     lv_obj_set_style_text_font(ui_TimePoint1, &ui_font_Cuyuan38, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 秒 roller：直接复用 minoptions，因为都是 00~59
     ui_SecSetRoller = lv_roller_create(ui_TimeSetPage);
     lv_roller_set_options(ui_SecSetRoller, minoptions, LV_ROLLER_MODE_NORMAL);
     lv_roller_set_selected(ui_SecSetRoller, datetime.Seconds, LV_ANIM_OFF);
@@ -480,6 +568,7 @@ void ui_TimeSetPage_screen_init(void)
     lv_obj_set_style_outline_width(ui_SecSetRoller, 2, LV_PART_SELECTED | LV_STATE_DEFAULT);
     lv_obj_set_style_outline_pad(ui_SecSetRoller, 1, LV_PART_SELECTED | LV_STATE_DEFAULT);
 
+// OK 按钮，样式与日期页一致
     ui_TimeSetOKButton = lv_btn_create(ui_TimeSetPage);
     lv_obj_set_width(ui_TimeSetOKButton, 240);
     lv_obj_set_height(ui_TimeSetOKButton, 50);
@@ -505,11 +594,24 @@ void ui_TimeSetPage_screen_init(void)
 }
 
 /////////////////// SCREEN deinit ////////////////////
+/**
+ * @brief 入口页销毁：空实现
+ * @return 无
+ * @note 无定时器；三个页面都没有动态资源。
+ */
 void ui_DateTimeSetPage_screen_deinit(void)
 {}
 
+/**
+ * @brief 日期页销毁：空实现
+ * @return 无
+ */
 void ui_DateSetPage_screen_deinit(void)
 {}
 
+/**
+ * @brief 时间页销毁：空实现
+ * @return 无
+ */
 void ui_TimeSetPage_screen_deinit(void)
 {}

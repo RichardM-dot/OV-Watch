@@ -1222,53 +1222,53 @@ uint32_t osEventFlagsGet (osEventFlagsId_t ef_id) {
 }
 
 uint32_t osEventFlagsWait (osEventFlagsId_t ef_id, uint32_t flags, uint32_t options, uint32_t timeout) {
-  EventGroupHandle_t hEventGroup = (EventGroupHandle_t)ef_id;
-  BaseType_t wait_all;
-  BaseType_t exit_clr;
+  EventGroupHandle_t hEventGroup = (EventGroupHandle_t)ef_id; // CMSIS 句柄还原成 FreeRTOS 事件组句柄
+  BaseType_t wait_all;   // pdTRUE=等所有位都置位；pdFAIL=等任意一位置位
+  BaseType_t exit_clr;   // pdTRUE=成功后清除标志位；pdFAIL=不清除
   uint32_t rflags;
 
-  if ((hEventGroup == NULL) || ((flags & EVENT_FLAGS_INVALID_BITS) != 0U)) {
-    rflags = (uint32_t)osErrorParameter;
+  if ((hEventGroup == NULL) || ((flags & EVENT_FLAGS_INVALID_BITS) != 0U)) { // 句柄空 或 flags 用了保留非法位
+    rflags = (uint32_t)osErrorParameter;   // 参数错误
   }
-  else if (IS_IRQ()) {
-    rflags = (uint32_t)osErrorISR;
+  else if (IS_IRQ()) {                     // 当前在中断上下文
+    rflags = (uint32_t)osErrorISR;         // 阻塞等待不能在中断里调用
   }
   else {
-    if (options & osFlagsWaitAll) {
-      wait_all = pdTRUE;
+    if (options & osFlagsWaitAll) {        // 选项含"等所有位"
+      wait_all = pdTRUE;                   // 对应 FreeRTOS xWaitForAllBits=pdTRUE
     } else {
-      wait_all = pdFAIL;
+      wait_all = pdFAIL;                   // 否则等任意一位
     }
 
-    if (options & osFlagsNoClear) {
-      exit_clr = pdFAIL;
+    if (options & osFlagsNoClear) {        // 选项含"不清除"
+      exit_clr = pdFAIL;                   // 成功后不清除标志位
     } else {
-      exit_clr = pdTRUE;
+      exit_clr = pdTRUE;                   // 默认成功后自动清除
     }
 
-    rflags = xEventGroupWaitBits (hEventGroup, (EventBits_t)flags, exit_clr, wait_all, (TickType_t)timeout);
+    rflags = xEventGroupWaitBits (hEventGroup, (EventBits_t)flags, exit_clr, wait_all, (TickType_t)timeout); // 调 FreeRTOS 等待事件位，返回事件组当前值
 
-    if (options & osFlagsWaitAll) {
-      if ((flags & rflags) != flags) {
+    if (options & osFlagsWaitAll) {        // 等所有位的情况
+      if ((flags & rflags) != flags) {     // 请求的位没有全部置位
         if (timeout > 0U) {
-          rflags = (uint32_t)osErrorTimeout;
+          rflags = (uint32_t)osErrorTimeout;    // 等过但超时
         } else {
-          rflags = (uint32_t)osErrorResource;
+          rflags = (uint32_t)osErrorResource;   // 非阻塞，资源未就绪
         }
       }
     }
-    else {
-      if ((flags & rflags) == 0U) {
+    else {                                 // 等任意位的情况
+      if ((flags & rflags) == 0U) {        // 请求的位一个都没置位
         if (timeout > 0U) {
-          rflags = (uint32_t)osErrorTimeout;
+          rflags = (uint32_t)osErrorTimeout;    // 等过但超时
         } else {
-          rflags = (uint32_t)osErrorResource;
+          rflags = (uint32_t)osErrorResource;   // 非阻塞，资源未就绪
         }
       }
     }
   }
 
-  return (rflags);
+  return (rflags);   // 成功返回事件标志值；失败返回 osErrorXxx 错误码
 }
 
 osStatus_t osEventFlagsDelete (osEventFlagsId_t ef_id) {
@@ -1788,6 +1788,7 @@ osStatus_t osMessageQueuePut (osMessageQueueId_t mq_id, const void *msg_ptr, uin
   return (stat);
 }
 
+// `osMessageQueueGet(mq_id, msg_ptr, msg_prio, timeout)`：从队列 `mq_id` 取一条消息拷贝到 `msg_ptr`，`msg_prio` 通常传 `NULL`，`timeout` 为等待 tick 数（0 表示不等待），返回 `osOK` 表示成功取到消息。
 osStatus_t osMessageQueueGet (osMessageQueueId_t mq_id, void *msg_ptr, uint8_t *msg_prio, uint32_t timeout) {
   QueueHandle_t hQueue = (QueueHandle_t)mq_id;
   osStatus_t stat;

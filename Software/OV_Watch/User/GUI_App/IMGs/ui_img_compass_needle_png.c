@@ -3,6 +3,15 @@
 // LVGL version: 8.3.11
 // Project name: Compass
 
+/*
+ * 【中文导读】ui_img_compass_needle_png.c —— 指南针指针图片的像素数据（数据文件）
+ * ----------------------------------------------------------------------------
+ * 由 SquareLine Studio 从 assets/compass_needle.png 转换而来，格式为 LVGL 8 的
+ * 真彩色带 Alpha 数组（每像素 4 字节：B,G,R,A），尺寸 23x171。
+ *
+ * 本文件只有数据、没有逻辑，不要手改；要换图请重新导出并保持变量名
+ * ui_img_compass_needle_png / _data / _dsc 不变，否则 ui_CompassPage.c 编译失败。
+ */
 #include "../ui.h"
 
 #ifndef LV_ATTRIBUTE_MEM_ALIGN

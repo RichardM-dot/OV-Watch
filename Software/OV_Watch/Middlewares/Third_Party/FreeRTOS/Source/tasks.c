@@ -2107,23 +2107,25 @@ void vTaskEndScheduler( void )
 }
 /*----------------------------------------------------------*/
 
-void vTaskSuspendAll( void )
+void vTaskSuspendAll( void ) // 只是挂起调度器，不是关中断，中断仍然可以响应，ISR 仍然可以运行
 {
-	/* A critical section is not required as the variable is of type
-	BaseType_t.  Please read Richard Barry's reply in the following link to a
-	post in the FreeRTOS support forum before reporting this as a bug! -
-	http://goo.gl/wu4acr */
+	/* 这里不需要进入临界区（关中断），因为 uxSchedulerSuspended 是 BaseType_t 类型，
+	 * 对它的读写本身是原子的。若认为这是 bug，请先阅读 Richard Barry 在
+	 * FreeRTOS 支持论坛上的回复：http://goo.gl/wu4acr */
 
-	/* portSOFRWARE_BARRIER() is only implemented for emulated/simulated ports that
-	do not otherwise exhibit real time behaviour. */
+	/* portSOFTWARE_BARRIER() 只在仿真/模拟端口上实现，
+	 * 用于让仿真环境表现出真实的实时行为；真实硬件上通常为空。 */
 	portSOFTWARE_BARRIER();
 
-	/* The scheduler is suspended if uxSchedulerSuspended is non-zero.  An increment
-	is used to allow calls to vTaskSuspendAll() to nest. */
+	/* uxSchedulerSuspended 非 0 表示调度器已被挂起。
+	 * 这里用“自增”而不是“置 1”，是为了支持嵌套调用：
+	 * 每调用一次 vTaskSuspendAll() 就加 1，
+	 * 每调用一次 xTaskResumeAll() 就减 1，
+	 * 只有减到 0 时调度器才真正恢复。 */
 	++uxSchedulerSuspended;
 
-	/* Enforces ordering for ports and optimised compilers that may otherwise place
-	the above increment elsewhere. */
+	/* 内存屏障：防止编译器/CPU 把上面的自增操作重排到屏障之后，
+	 * 保证挂起标志的写入顺序对其它代码可见。 */
 	portMEMORY_BARRIER();
 }
 /*----------------------------------------------------------*/

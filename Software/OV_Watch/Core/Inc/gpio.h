@@ -2,8 +2,11 @@
 /**
   ******************************************************************************
   * @file    gpio.h
-  * @brief   This file contains all the function prototypes for
-  *          the gpio.c file
+  * @brief   gpio.c 的函数声明。
+  *
+  * 中文说明：
+  *   MX_GPIO_Init 统一完成所有普通 GPIO 的上电初始配置
+  *   （按键、电源控制、传感器中断脚、片选等）。
   ******************************************************************************
   * @attention
   *
@@ -19,7 +22,7 @@
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __GPIO_H__
-#define __GPIO_H__
+#define __GPIO_H__	// 防止重复包含
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +39,7 @@ extern "C" {
 
 /* USER CODE END Private defines */
 
+/** 初始化全部 GPIO：输入/输出模式、上下拉、初始电平 */
 void MX_GPIO_Init(void);
 
 /* USER CODE BEGIN Prototypes */
@@ -46,4 +50,3 @@ void MX_GPIO_Init(void);
 }
 #endif
 #endif /*__ GPIO_H__ */
-

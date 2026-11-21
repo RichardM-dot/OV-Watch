@@ -2,8 +2,11 @@
 /**
   ******************************************************************************
   * @file    dma.h
-  * @brief   This file contains all the function prototypes for
-  *          the dma.c file
+  * @brief   dma.c 的函数声明。
+  *
+  * 中文说明：
+  *   DMA 用于 SPI 刷屏（SPI1 TX）、串口收发等需要搬大量数据的场景，
+  *   可显著降低 CPU 占用。具体通道配置在 dma.c 中完成。
   ******************************************************************************
   * @attention
   *
@@ -19,7 +22,7 @@
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __DMA_H__
-#define __DMA_H__
+#define __DMA_H__	// 防止重复包含
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,6 +41,7 @@ extern "C" {
 
 /* USER CODE END Private defines */
 
+/** 初始化 DMA 控制器（使能时钟、配置中断优先级） */
 void MX_DMA_Init(void);
 
 /* USER CODE BEGIN Prototypes */
@@ -49,4 +53,3 @@ void MX_DMA_Init(void);
 #endif
 
 #endif /* __DMA_H__ */
-

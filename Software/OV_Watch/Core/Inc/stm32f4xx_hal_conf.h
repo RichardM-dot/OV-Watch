@@ -6,6 +6,14 @@
   * @brief   HAL configuration template file.
   *          This file should be copied to the application folder and renamed
   *          to stm32f4xx_hal_conf.h.
+  *
+  * 中文说明（本工程实际配置）：
+  *   - 芯片：STM32F411CE（Cortex-M4F）
+  *   - 外部晶振 HSE：25MHz；内部 HSI：16MHz；LSE：32.768kHz
+  *   - 已启用模块：ADC、RTC、SPI、TIM、UART、GPIO、EXTI、DMA、RCC、FLASH、PWR、CORTEX
+  *   - 未启用模块（被注释）：I2C、IWDG、CAN、USB、以太网等
+  *     （I2C 由 BSP 软件模拟实现，不使用硬件 I2C 外设）
+  *   - 关闭全部 HAL 回调注册功能以节省 Flash
   ******************************************************************************
   * @attention
   *
@@ -34,10 +42,12 @@
 /* ########################## Module Selection ############################## */
 /**
   * @brief This is the list of modules to be used in the HAL driver
+  *
+  * 中文：以下宏决定编译哪些 HAL 外设驱动，取消注释即启用对应模块。
   */
 #define HAL_MODULE_ENABLED
 
-  #define HAL_ADC_MODULE_ENABLED
+  #define HAL_ADC_MODULE_ENABLED	// ADC：电池电压采样
 /* #define HAL_CRYP_MODULE_ENABLED   */
 /* #define HAL_CAN_MODULE_ENABLED   */
 /* #define HAL_CRC_MODULE_ENABLED   */
@@ -58,13 +68,13 @@
 /* #define HAL_IWDG_MODULE_ENABLED   */
 /* #define HAL_LTDC_MODULE_ENABLED   */
 /* #define HAL_RNG_MODULE_ENABLED   */
-#define HAL_RTC_MODULE_ENABLED
+#define HAL_RTC_MODULE_ENABLED	// RTC：实时时钟（走时/闹钟）
 /* #define HAL_SAI_MODULE_ENABLED   */
 /* #define HAL_SD_MODULE_ENABLED   */
 /* #define HAL_MMC_MODULE_ENABLED   */
-#define HAL_SPI_MODULE_ENABLED
-#define HAL_TIM_MODULE_ENABLED
-#define HAL_UART_MODULE_ENABLED
+#define HAL_SPI_MODULE_ENABLED	// SPI：LCD 刷屏数据输出
+#define HAL_TIM_MODULE_ENABLED	// TIM：背光 PWM
+#define HAL_UART_MODULE_ENABLED	// UART：串口通信/调试
 /* #define HAL_USART_MODULE_ENABLED   */
 /* #define HAL_IRDA_MODULE_ENABLED   */
 /* #define HAL_SMARTCARD_MODULE_ENABLED   */
@@ -81,13 +91,13 @@
 /* #define HAL_SPDIFRX_MODULE_ENABLED   */
 /* #define HAL_DFSDM_MODULE_ENABLED   */
 /* #define HAL_LPTIM_MODULE_ENABLED   */
-#define HAL_GPIO_MODULE_ENABLED
-#define HAL_EXTI_MODULE_ENABLED
-#define HAL_DMA_MODULE_ENABLED
-#define HAL_RCC_MODULE_ENABLED
-#define HAL_FLASH_MODULE_ENABLED
-#define HAL_PWR_MODULE_ENABLED
-#define HAL_CORTEX_MODULE_ENABLED
+#define HAL_GPIO_MODULE_ENABLED	// GPIO：通用输入输出
+#define HAL_EXTI_MODULE_ENABLED	// EXTI：外部中断
+#define HAL_DMA_MODULE_ENABLED	// DMA：数据搬运
+#define HAL_RCC_MODULE_ENABLED	// RCC：时钟树配置
+#define HAL_FLASH_MODULE_ENABLED	// FLASH：片内 Flash 操作
+#define HAL_PWR_MODULE_ENABLED	// PWR：电源/低功耗管理
+#define HAL_CORTEX_MODULE_ENABLED	// CORTEX：内核外设（NVIC/SysTick 等）
 
 /* ########################## HSE/HSI Values adaptation ##################### */
 /**
@@ -96,11 +106,11 @@
   *        (when HSE is used as system clock source, directly or through the PLL).
   */
 #if !defined  (HSE_VALUE)
-  #define HSE_VALUE    25000000U /*!< Value of the External oscillator in Hz */
+  #define HSE_VALUE    25000000U /*!< Value of the External oscillator in Hz */	// 外部晶振 25MHz
 #endif /* HSE_VALUE */
 
 #if !defined  (HSE_STARTUP_TIMEOUT)
-  #define HSE_STARTUP_TIMEOUT    100U   /*!< Time out for HSE start up, in ms */
+  #define HSE_STARTUP_TIMEOUT    100U   /*!< Time out for HSE start up, in ms */	// HSE 起振超时 100ms
 #endif /* HSE_STARTUP_TIMEOUT */
 
 /**
@@ -109,14 +119,14 @@
   *        (when HSI is used as system clock source, directly or through the PLL).
   */
 #if !defined  (HSI_VALUE)
-  #define HSI_VALUE    ((uint32_t)16000000U) /*!< Value of the Internal oscillator in Hz*/
+  #define HSI_VALUE    ((uint32_t)16000000U) /*!< Value of the Internal oscillator in Hz*/	// 内部高速时钟 16MHz
 #endif /* HSI_VALUE */
 
 /**
   * @brief Internal Low Speed oscillator (LSI) value.
   */
 #if !defined  (LSI_VALUE)
- #define LSI_VALUE  32000U       /*!< LSI Typical Value in Hz*/
+ #define LSI_VALUE  32000U       /*!< LSI Typical Value in Hz*/	// 内部低速时钟约 32kHz（RTC 备选时钟源）
 #endif /* LSI_VALUE */                      /*!< Value of the Internal Low Speed oscillator in Hz
                                              The real value may vary depending on the variations
                                              in voltage and temperature.*/
@@ -124,11 +134,11 @@
   * @brief External Low Speed oscillator (LSE) value.
   */
 #if !defined  (LSE_VALUE)
- #define LSE_VALUE  32768U    /*!< Value of the External Low Speed oscillator in Hz */
+ #define LSE_VALUE  32768U    /*!< Value of the External Low Speed oscillator in Hz */	// 外部低速晶振 32.768kHz（RTC 时钟源）
 #endif /* LSE_VALUE */
 
 #if !defined  (LSE_STARTUP_TIMEOUT)
-  #define LSE_STARTUP_TIMEOUT    5000U   /*!< Time out for LSE start up, in ms */
+  #define LSE_STARTUP_TIMEOUT    5000U   /*!< Time out for LSE start up, in ms */	// LSE 起振超时 5s（晶振起振较慢）
 #endif /* LSE_STARTUP_TIMEOUT */
 
 /**
@@ -146,13 +156,17 @@
 /* ########################### System Configuration ######################### */
 /**
   * @brief This is the HAL system configuration section
+  *
+  * 中文：VDD 电压、SysTick 中断优先级、预取/缓存开关。
+  * 注意 USE_RTOS 是 HAL 库自身的 RTOS 感知开关，本工程为 0，
+  * 不影响 FreeRTOS 的使用（FreeRTOS 通过 CMSIS-RTOS2 独立管理）。
   */
-#define  VDD_VALUE		      3300U /*!< Value of VDD in mv */
-#define  TICK_INT_PRIORITY            15U   /*!< tick interrupt priority */
-#define  USE_RTOS                     0U
-#define  PREFETCH_ENABLE              1U
-#define  INSTRUCTION_CACHE_ENABLE     1U
-#define  DATA_CACHE_ENABLE            1U
+#define  VDD_VALUE		      3300U /*!< Value of VDD in mv */	// 供电电压 3.3V
+#define  TICK_INT_PRIORITY            15U   /*!< tick interrupt priority */	// SysTick 中断优先级（最低）
+#define  USE_RTOS                     0U	// HAL 不使用 RTOS 感知模式
+#define  PREFETCH_ENABLE              1U	// 使能指令预取
+#define  INSTRUCTION_CACHE_ENABLE     1U	// 使能指令缓存
+#define  DATA_CACHE_ENABLE            1U	// 使能数据缓存
 
 #define  USE_HAL_ADC_REGISTER_CALLBACKS         0U /* ADC register callback disabled       */
 #define  USE_HAL_CAN_REGISTER_CALLBACKS         0U /* CAN register callback disabled       */
@@ -198,10 +212,14 @@
 /**
   * @brief Uncomment the line below to expanse the "assert_param" macro in the
   *        HAL drivers code
+  *
+  * 中文：取消注释可启用 HAL 参数断言检查（调试用，会增加代码量）。
   */
 /* #define USE_FULL_ASSERT    1U */
 
 /* ################## Ethernet peripheral configuration ##################### */
+
+/* 中文：本工程未使用以太网，以下为 HAL 模板保留的以太网/PHY 默认参数，不参与编译。 */
 
 /* Section 1 : Ethernet peripheral configuration */
 
@@ -262,6 +280,8 @@
 /* CRC FEATURE: Use to activate CRC feature inside HAL SPI Driver
 * Activated: CRC code is present inside driver
 * Deactivated: CRC code cleaned from driver
+*
+* 中文：0 表示不启用 SPI 硬件 CRC（节省代码空间，LCD 刷屏不需要）。
 */
 
 #define USE_SPI_CRC                     0U
@@ -269,6 +289,8 @@
 /* Includes ------------------------------------------------------------------*/
 /**
   * @brief Include module's header file
+  *
+  * 中文：根据上面启用的模块条件编译对应的 HAL 头文件。
   */
 
 #ifdef HAL_RCC_MODULE_ENABLED
@@ -476,6 +498,9 @@
   *         line number of the call that failed.
   *         If expr is true, it returns no value.
   * @retval None
+  *
+  * 中文：启用 USE_FULL_ASSERT 后，参数非法时调用 assert_failed 并传入文件名/行号；
+  *       未启用时该宏展开为空，不产生任何代码。
   */
   #define assert_param(expr) ((expr) ? (void)0U : assert_failed((uint8_t *)__FILE__, __LINE__))
 /* Exported functions ------------------------------------------------------- */

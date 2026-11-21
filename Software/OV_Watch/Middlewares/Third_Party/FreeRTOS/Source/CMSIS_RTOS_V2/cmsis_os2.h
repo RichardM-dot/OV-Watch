@@ -186,7 +186,7 @@ typedef enum {
 
 
 /// \details Thread ID identifies the thread.
-typedef void *osThreadId_t;
+typedef void *osThreadId_t; // 给void*起一个别名叫做 osThreadId_t，表示线程ID。
 
 /// \details Timer ID identifies the timer.
 typedef void *osTimerId_t;
@@ -694,7 +694,7 @@ osStatus_t osMessageQueuePut (osMessageQueueId_t mq_id, const void *msg_ptr, uin
 /// \param[out]    msg_prio      pointer to buffer for message priority or NULL.
 /// \param[in]     timeout       \ref CMSIS_RTOS_TimeOutValue or 0 in case of no time-out.
 /// \return status code that indicates the execution status of the function.
-osStatus_t osMessageQueueGet (osMessageQueueId_t mq_id, void *msg_ptr, uint8_t *msg_prio, uint32_t timeout);
+osStatus_t osMessageQueueGet (osMessageQueueId_t mq_id, void *msg_ptr, uint8_t *msg_prio, uint32_t timeout); // 表示函数执行结果的状态码
 
 /// Get maximum number of messages in a Message Queue.
 /// \param[in]     mq_id         message queue ID obtained by \ref osMessageQueueNew.

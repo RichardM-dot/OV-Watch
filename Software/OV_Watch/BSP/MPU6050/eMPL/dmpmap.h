@@ -3,6 +3,14 @@
     Copyright (C) 2011 InvenSense Corporation, All Rights Reserved.
  $
  */
+/**
+ * @file    dmpmap.h
+ * @brief   DMP 内存映射表：DMP 内部各变量（陀螺/加速度原始值、四元数、
+ *          计步、敲击检测等）在 DMP 地址空间中的偏移。
+ *
+ * 数值为 DMP 内部 RAM 的字节偏移（成对出现 H=高字节 / L=低字节），
+ * 由官方 DMP 固件固定，不能修改；dmp_read_fifo/dmp_get_* 会按此表取值。
+ */
 #ifndef DMPMAP_H
 #define DMPMAP_H
 

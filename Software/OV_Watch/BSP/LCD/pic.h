@@ -1,6 +1,16 @@
+/**
+ * @file    pic.h
+ * @brief   开机/测试用图片的点阵数据（RGB565，高字节在前）。
+ *
+ * 文件头注释 0X10,0X10,0X00,0X28,0X00,0X28,0X01,0X1B 为取模软件生成的格式说明：
+ * 16 位色、宽 0x28=40 像素、高 0x28=40 像素。数组 gImage_1 共 3200 字节，
+ * 即 40*40*2 字节，可直接交给 LCD_ShowPicture 显示。
+ * 注意：图片数据不可修改，任何改动都会导致显示花屏。
+ */
 #ifndef __PIC_H
 #define __PIC_H
 
+/* 40x40 像素 RGB565 图片数据，共 3200 字节 */
 const unsigned char gImage_1[3200] = { /* 0X10,0X10,0X00,0X28,0X00,0X28,0X01,0X1B, */
 0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,
 0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XFF,0XF7,0XBE,

@@ -6,6 +6,26 @@
 #include "../Inc/ui_SetPage.h"
 
 #include "../../../Func/Inc/HWDataAccess.h"
+/*
+ * 【中文导读】ui_HomePage.c —— 表盘首页 + 关机页（本项目最重要的 UI 文件）
+ * ----------------------------------------------------------------------------
+ * 首页是整个系统的“驾驶舱”，一块 240x280 的屏幕同时显示 6 类信息：
+ *   时间（时/分两个 Label，中间冒号固定不动）、日期与星期、电量圆弧、
+ *   今日步数与进度条、温度圆弧、湿度圆弧、心率圆弧。
+ * 下方还挂着一个可下拉的快捷面板（DropDownPanel），内含 NFC / BLE / 关机 /
+ * 设置四个按钮和一条背光滑块；关机页 PowerPage 是独立的 lv_obj 屏幕。
+ * 
+ * 数据来源全部是 HWInterface（见 Func/Inc/HWDataAccess.h）：
+ *   RealTimeClock.GetTimeDate → 时间/日期；Power.power_remain → 电量；
+ *   IMU.Steps → 步数；AHT21.temperature/humidity → 温湿度；HR_meter.HrRate → 心率。
+ * UI 自己不采样，只在 500 ms 定时器里“比对缓存值，变了才刷”，避免无谓重绘。
+ * 
+ * 页面生命周期：Page_t Page_Home 注册到 PageManager；init 创建控件与定时器，
+ * deinit 只删定时器（屏幕对象由 lv_scr_load_anim 的 auto_del 回收）。
+ * 
+ * 阅读顺序：变量分区 → HomePage_timer_cb（数据刷新）→ 各 ui_event_*（交互）
+ *           → ui_HomePage_screen_init（控件树）→ ui_PowerPage_screen_init。
+ */
 
 
 ///////////////////// VARIABLES ////////////////////
@@ -53,7 +73,9 @@ lv_obj_t * ui_PowerDownLabel;
 
 lv_timer_t * ui_HomePageTimer;
 
+// ── 显示缓存：保存“上一次画到屏幕上的值”，与硬件真值比较后才刷新 ──
 // variables
+// 时间：初值只是占位，首个 500 ms 定时器周期就会被 RTC 真值覆盖
 uint8_t ui_TimeHourValue = 11;
 uint8_t ui_TimeMinuteValue = 59;
 const char * ui_Days[7] = {"Mon.", "Tue.", "Wed.", "Thu.", "Fri.", "Sat.", "Sun."};
@@ -61,6 +83,7 @@ uint8_t ui_DateMonthValue = 11;
 uint8_t ui_DateDayValue = 8;
 uint8_t ui_DataWeekdayValue = 2;
 
+// 电量/步数/背光：背光滑块的值会回写到 HWInterface.LCD.SetLight
 uint8_t ui_BatArcValue = 70;
 uint16_t ui_StepNumValue = 0;
 uint8_t ui_LightSliderValue = 50;
@@ -73,25 +96,40 @@ int8_t ui_HomePageHumiValue = 67;
 
 
 ///////////////////// Page Manager //////////////////
+/**
+ * @brief 把首页与关机页注册进页面管理器
+ * @return 无
+ * @note Page_t 的第三个成员是“屏幕对象指针的地址”，PageManager 用 *page_obj 取 lv_obj_t*。
+ */
 Page_t Page_Home = {ui_HomePage_screen_init, ui_HomePage_screen_deinit, &ui_HomePage};
 Page_t Page_Power = {ui_PowerPage_screen_init, ui_PowerPage_screen_deinit, &ui_PowerPage};
 
 /////////////////// private timer ///////////////////
 // need to be destroyed when the page is destroyed
+/**
+ * @brief 首页私有定时器：每 500 ms 把 HWInterface 里的最新值搬到控件上
+ * @param timer LVGL 定时器句柄（未使用）
+ * @return 无
+ * @note 由 LVGL 的 GUI 任务上下文调用（LvHandlerTask），因此可以直接操作控件；只在首页位于栈顶时工作，后台页面不浪费重绘。
+ */
 static void HomePage_timer_cb(lv_timer_t * timer)
 {
   uint8_t value_strbuf[10];
+// 当前页不是首页时直接跳过：Page_Get_NowPage 返回栈顶 Page_t
   if(Page_Get_NowPage()->page_obj  == &ui_HomePage)
 	{
+// 被注释掉的冒号闪烁实现：osDelay(500) 会阻塞 GUI 任务，已废弃
 			/*
 			lv_obj_set_style_text_opa(ui_TimeColonLabel, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 			osDelay(500);
 			lv_obj_set_style_text_opa(ui_TimeColonLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 			*/
 
+// 一次 RTC 读取拿全 7 个字段，避免多次读寄存器出现跨秒撕裂
 			HW_DateTimeTypeDef DateTime;
       HWInterface.RealTimeClock.GetTimeDate(&DateTime);
 
+// 分钟变化：两位补零，视觉上宽度稳定不跳动
 			if(ui_TimeMinuteValue != DateTime.Minutes)
 			{
 				ui_TimeMinuteValue = DateTime.Minutes;
@@ -99,6 +137,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_TimeMinuteLabel, value_strbuf);
 			}
 
+// 小时用 %2d（空格对齐）而不是 %02d，表盘上不显示前导 0
 			if(ui_TimeHourValue != DateTime.Hours)
 			{
 				ui_TimeHourValue = DateTime.Hours;
@@ -106,6 +145,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_TimeHourLabel, value_strbuf);
 			}
 
+// 日期变化时同步刷新星期；WeekDay 是 1~7，数组下标要减 1
 			if(ui_DateDayValue != DateTime.Date)
 			{
 				ui_DateDayValue = DateTime.Date;
@@ -115,6 +155,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_DayLabel, ui_Days[ui_DataWeekdayValue-1]);
 
 			}
+// 月份变化单独判断：跨月时日期与星期必须一起更新
 			if(ui_DateMonthValue != DateTime.Month)
 			{
 				ui_DateMonthValue = DateTime.Month;
@@ -125,6 +166,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_DayLabel, ui_Days[ui_DataWeekdayValue-1]);
 			}
 
+// 电量：圆弧 0~100，数值文本带百分号
       if(ui_BatArcValue != HWInterface.Power.power_remain)
       {
         ui_BatArcValue = HWInterface.Power.power_remain;
@@ -133,6 +175,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_BatNumLabel, value_strbuf);
       }
 
+// 步数：只更新数字，进度条 StepNumBar 在本文件里没有跟着走（固定 40）
       if(ui_StepNumValue != HWInterface.IMU.Steps)
       {
         ui_StepNumValue = HWInterface.IMU.Steps;
@@ -140,6 +183,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_StepNumLabel, value_strbuf);
       }
 
+// 温度：先转 int8_t 再比较，传感器返回 float，避免 0.1 度级抖动引发重绘
       if( ui_HomePageTempValue != (int8_t)HWInterface.AHT21.temperature )
       {
         ui_HomePageTempValue = (int8_t)HWInterface.AHT21.temperature;
@@ -148,6 +192,7 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 				lv_label_set_text(ui_TempNumLabel, value_strbuf);
       }
 
+// 湿度同理；HumiArc 的背景弧被设成 270~620 度，视觉上是“缺口圆环”
       if( ui_HomePageHumiValue != (int8_t)HWInterface.AHT21.humidity )
       {
         ui_HomePageHumiValue = (int8_t)HWInterface.AHT21.humidity;
@@ -161,6 +206,12 @@ static void HomePage_timer_cb(lv_timer_t * timer)
 
 
 ///////////////////// FUNCTIONS ////////////////////
+/**
+ * @brief 首页手势：右滑返回菜单页
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 只处理 LV_EVENT_GESTURE；target 变量未使用，保留是 SquareLine 的模板痕迹。
+ */
 void ui_event_HomePage(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -175,6 +226,12 @@ void ui_event_HomePage(lv_event_t * e)
 		}
 }
 
+/**
+ * @brief 下拉面板 NFC 开关：记录开关状态供页面重建时恢复
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 真正驱动 NFC 的 ICcard_Select() 已被注释，当前只维护 ui_HomePageNFCEN 标志。
+ */
 void ui_event_NFCButton(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -193,6 +250,12 @@ void ui_event_NFCButton(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 下拉面板蓝牙开关：勾选即调 KT6328 的 Enable/Disable
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note BLE 开关是“立即生效”型，不做二次确认；状态存 ui_HomePageBLEEN 供重建恢复。
+ */
 void ui_event_BLEButton(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -212,6 +275,12 @@ void ui_event_BLEButton(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 电源按钮：进入滑动关机页
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 走 Page_Load(&Page_Power) 入栈，返回时 Page_Back 会重建首页。
+ */
 void ui_event_PowerButton(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -226,6 +295,12 @@ void ui_event_PowerButton(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 关机滑块：滑到 >=90 才执行关机，防误触
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 阈值 90 是硬编码；Power.Shutdown() 之后不会返回（切断电源保持）。
+ */
 void ui_event_PowerSlider(lv_event_t * e)
 {
 		lv_event_code_t event_code = lv_event_get_code(e);
@@ -244,6 +319,11 @@ void ui_event_PowerSlider(lv_event_t * e)
 		}
 }
 
+/**
+ * @brief 设置按钮：进入设置页
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_SetButton(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -254,6 +334,12 @@ void ui_event_SetButton(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 背光滑块：拖动即实时改 PWM 占空比
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 没有做防抖：LVGL 拖动时每个 VALUE_CHANGED 都写一次 TIM3 比较寄存器，频率约几十 Hz，对本项目无影响。
+ */
 void ui_event_LightSlider(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -266,14 +352,35 @@ void ui_event_LightSlider(lv_event_t * e)
 }
 
 ///////////////////// SCREEN init ////////////////////
+/**
+ * @brief 创建首页全部控件、绑定事件并启动 500 ms 刷新定时器
+ * @return 无
+ * @note 函数无参数无返回值；重复调用会重复创建控件与定时器，必须由 PageManager 保证只调一次。
+ */
+/*
+ * 创建首页控件树（SquareLine 导出后手工改过）
+ * 控件层级：ui_HomePage（screen）
+ *   ├─ 时间三件套：Hour / Colon / Minute（右对齐，48 号字）
+ *   ├─ 顶部信息：BatArc + 电量数字 + 日期 + 星期
+ *   ├─ 中部：步数图标/文字/数字 + 步数进度条
+ *   ├─ 底部三圆环：Temp / Humi / HR（各带图标与数字）
+ *   └─ DropDownPanel（可滚动容器）
+ *        ├─ UpBGPanel：NFC / BLE 两个开关
+ *        ├─ PowerButton / SetButton / LightSlider
+ *        └─ DownBGPanel：底部留白，保证能滚出面板
+ * 坐标全部是相对父对象的偏移，配合 LV_ALIGN_* 对齐；改布局时先确认父对象。
+ */
 void ui_HomePage_screen_init(void)
 {
+// 清空菜单页记住的滚动偏移，保证每次回首页都从顶部开始
 		ui_MenuScrollY = 0;
     uint8_t value_strbuf[10];
 
+// screen 对象：LVGL 的根容器，尺寸自动等于显示屏 240x280
     ui_HomePage = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_HomePage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
+// 时间：右对齐布局，时/分各自独立成 Label，方便只改其中一个
     ui_TimeHourLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_TimeHourLabel, LV_SIZE_CONTENT);   /// 10
     lv_obj_set_height(ui_TimeHourLabel, LV_SIZE_CONTENT);    /// 10
@@ -284,6 +391,7 @@ void ui_HomePage_screen_init(void)
     lv_label_set_text(ui_TimeHourLabel, value_strbuf);
     lv_obj_set_style_text_font(ui_TimeHourLabel, &ui_font_Cuyuan48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 冒号单独成 Label：颜色更暗（0x808080），起视觉分隔作用
     ui_TimeColonLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_TimeColonLabel, LV_SIZE_CONTENT);   /// 10
     lv_obj_set_height(ui_TimeColonLabel, LV_SIZE_CONTENT);    /// 10
@@ -305,6 +413,7 @@ void ui_HomePage_screen_init(void)
     lv_label_set_text(ui_TimeMinuteLabel, value_strbuf);
     lv_obj_set_style_text_font(ui_TimeMinuteLabel, &ui_font_Cuyuan48, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 电量圆弧：50x50，绿色；旋钮被 pad=0 撑满，视觉上像圆点
     ui_BatArc = lv_arc_create(ui_HomePage);
     lv_obj_set_width(ui_BatArc, 50);
     lv_obj_set_height(ui_BatArc, 50);
@@ -326,6 +435,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_pad_top(ui_BatArc, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(ui_BatArc, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
+// 电池图标用 iconfont 的私有码位，字体文件在 GUI_App/Fonts
     ui_BaticonLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_BaticonLabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_BaticonLabel, LV_SIZE_CONTENT);    /// 1
@@ -347,6 +457,7 @@ void ui_HomePage_screen_init(void)
     lv_label_set_text(ui_BatNumLabel, value_strbuf);
     lv_obj_set_style_text_font(ui_BatNumLabel, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 日期 "月-日"：两位月 + 两位日，红色强调
     ui_DateLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_DateLabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_DateLabel, LV_SIZE_CONTENT);    /// 1
@@ -359,6 +470,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_text_opa(ui_DateLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_DateLabel, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 星期文本直接查 ui_Days 表，避免运行时算蔡勒公式
     ui_DayLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_DayLabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_DayLabel, LV_SIZE_CONTENT);    /// 1
@@ -370,6 +482,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_text_opa(ui_DayLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_DayLabel, &lv_font_montserrat_20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 步数区：图标 + 中文标签 + 数字，颜色统一蓝色 0x3278FF
     ui_StepiconLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_StepiconLabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_StepiconLabel, LV_SIZE_CONTENT);    /// 1
@@ -402,6 +515,7 @@ void ui_HomePage_screen_init(void)
     lv_label_set_text(ui_StepNumLabel, value_strbuf);
     lv_obj_set_style_text_font(ui_StepNumLabel, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 步数进度条：满量程未设置，当前固定 40%，仅作装饰
     ui_StepNumBar = lv_bar_create(ui_HomePage);
     lv_bar_set_value(ui_StepNumBar, 40, LV_ANIM_OFF);
     lv_obj_set_width(ui_StepNumBar, 200);
@@ -413,6 +527,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_bg_color(ui_StepNumBar, lv_color_hex(0x3278FF), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_StepNumBar, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
+// 温度圆弧量程 -20~60，覆盖手表使用环境；橙色
     ui_TempArc = lv_arc_create(ui_HomePage);
     lv_obj_set_width(ui_TempArc, 50);
     lv_obj_set_height(ui_TempArc, 50);
@@ -455,6 +570,7 @@ void ui_HomePage_screen_init(void)
     sprintf(value_strbuf,"%d",ui_HomePageTempValue);
     lv_label_set_text(ui_TempNumLabel, value_strbuf);
 
+// 湿度圆弧：图标与数字分开创建，数字在圆环下方
     ui_HumiiconLabel = lv_label_create(ui_HomePage);
     lv_obj_set_width(ui_HumiiconLabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_HumiiconLabel, LV_SIZE_CONTENT);    /// 1
@@ -497,6 +613,7 @@ void ui_HomePage_screen_init(void)
     sprintf(value_strbuf,"%d",ui_HomePageHumiValue);
     lv_label_set_text(ui_HumiNumLabel, value_strbuf);
 
+// 心率圆弧：红色，量程默认 0~100；数值来自 EM7028
 		ui_HRArc = lv_arc_create(ui_HomePage);
     lv_obj_set_width(ui_HRArc, 50);
     lv_obj_set_height(ui_HRArc, 50);
@@ -540,6 +657,7 @@ void ui_HomePage_screen_init(void)
     lv_label_set_text(ui_HRNumLabel, value_strbuf);
 
 
+// 下拉面板：420 高、初始 y=-10，再 scroll_by(-130) 把内容藏到屏幕上方
     ui_DropDownPanel = lv_obj_create(ui_HomePage);
     lv_obj_set_width(ui_DropDownPanel, 240);
     lv_obj_set_height(ui_DropDownPanel, 420);
@@ -557,6 +675,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_bg_opa(ui_DropDownPanel, 0, LV_PART_SCROLLBAR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_DropDownPanel, 0, LV_PART_SCROLLBAR | LV_STATE_SCROLLED);
 
+// 上半个背景板：半透明深灰，给 NFC/BLE 按钮做底
     ui_UpBGPanel = lv_obj_create(ui_DropDownPanel);
     lv_obj_set_width(ui_UpBGPanel, 240);
     lv_obj_set_height(ui_UpBGPanel, 130);
@@ -567,6 +686,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_bg_color(ui_UpBGPanel, lv_color_hex(0x323232), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_UpBGPanel, 200, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// NFC 开关按钮：CHECKABLE，勾选态换蓝色；重建时按 ui_HomePageNFCEN 恢复
     ui_NFCButton = lv_btn_create(ui_DropDownPanel);
     lv_obj_set_width(ui_NFCButton, 50);
     lv_obj_set_height(ui_NFCButton, 50);
@@ -590,6 +710,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_text_opa(ui_NFCLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_NFCLabel, &ui_font_iconfont34, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// BLE 开关按钮：同上，但点击会真正调用 KT6328
     ui_BLEButton = lv_btn_create(ui_DropDownPanel);
     lv_obj_set_width(ui_BLEButton, 50);
     lv_obj_set_height(ui_BLEButton, 50);
@@ -613,6 +734,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_text_opa(ui_BLELabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_BLELabel, &ui_font_iconfont34, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 关机按钮 + 设置按钮：普通按钮，仅触发 Page_Load
     ui_PowerButton = lv_btn_create(ui_DropDownPanel);
     lv_obj_set_width(ui_PowerButton, 50);
     lv_obj_set_height(ui_PowerButton, 50);
@@ -653,6 +775,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_text_opa(ui_SetLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_SetLabel, &ui_font_iconfont34, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 背光滑块：竖向 110 高，范围 0~100（LVGL 默认 0~100）
     ui_LightSlider = lv_slider_create(ui_DropDownPanel);
     lv_slider_set_value(ui_LightSlider, ui_LightSliderValue, LV_ANIM_OFF);
     if(lv_slider_get_mode(ui_LightSlider) == LV_SLIDER_MODE_RANGE) lv_slider_set_left_value(ui_LightSlider, 0, LV_ANIM_OFF);
@@ -683,6 +806,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_text_opa(ui_LightLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_LightLabel, &ui_font_iconfont34, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 下半个背景板：透明，仅用于撑出滚动区域，让面板能停在中间
     ui_DownBGPanel = lv_obj_create(ui_DropDownPanel);
     lv_obj_set_width(ui_DownBGPanel, 240);
     lv_obj_set_height(ui_DownBGPanel, 130);
@@ -696,6 +820,7 @@ void ui_HomePage_screen_init(void)
     lv_obj_set_style_border_opa(ui_DownBGPanel, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 		//events
+// 事件绑定：全部用 LV_EVENT_ALL，由回调内部再按 event_code 过滤
 		lv_obj_add_event_cb(ui_HomePage, ui_event_HomePage, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_NFCButton, ui_event_NFCButton, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_BLEButton, ui_event_BLEButton, LV_EVENT_ALL, NULL);
@@ -704,16 +829,23 @@ void ui_HomePage_screen_init(void)
     lv_obj_add_event_cb(ui_LightSlider,ui_event_LightSlider, LV_EVENT_ALL, NULL);
 
     //timer
+// 500 ms 刷新：比 RTC 秒跳变慢半拍，但足够；周期越短功耗越高
     ui_HomePageTimer = lv_timer_create(HomePage_timer_cb, 500,  NULL);
 
 }
 
 
+/**
+ * @brief 创建关机页：一条横向滑块 + “滑动关机”提示
+ * @return 无
+ * @note 关机页是独立 screen，由 Page_Load(&Page_Power) 载入；滑块值 >=90 才真正关机。
+ */
 void ui_PowerPage_screen_init(void)
 {
     ui_PowerPage = lv_obj_create(NULL);
     lv_obj_clear_flag(ui_PowerPage, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
+// 滑块 220x50，灰色底、深红指示条；旋钮透明（opa=0）
     ui_PowerSlider = lv_slider_create(ui_PowerPage);
     lv_obj_set_width(ui_PowerSlider, 220);
     lv_obj_set_height(ui_PowerSlider, 50);
@@ -727,6 +859,7 @@ void ui_PowerPage_screen_init(void)
     lv_obj_set_style_bg_color(ui_PowerSlider, lv_color_hex(0x800000), LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_PowerSlider, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
 
+// 提示文字压在滑块上，居中，20 号字
     ui_PowerDownLabel = lv_label_create(ui_PowerSlider);
     lv_obj_set_width(ui_PowerDownLabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_PowerDownLabel, LV_SIZE_CONTENT);    /// 1
@@ -742,10 +875,20 @@ void ui_PowerPage_screen_init(void)
 }
 
 /////////////////// SCREEN deinit ////////////////////
+/**
+ * @brief 首页销毁：删除私有定时器
+ * @return 无
+ * @note 只删定时器不删控件——screen 由 lv_scr_load_anim(..., auto_del=true) 回收。若定时器不删，回调会在已释放的控件上跑，必崩。
+ */
 void ui_HomePage_screen_deinit(void)
 {
   lv_timer_del(ui_HomePageTimer);
 }
 
+/**
+ * @brief 关机页销毁：无定时器/无动态资源，空实现
+ * @return 无
+ * @note 保留空函数是为了满足 Page_t 的函数指针签名，不能删。
+ */
 void ui_PowerPage_screen_deinit(void)
 {}

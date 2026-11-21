@@ -19,7 +19,7 @@
 /* Private define ------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
-extern osMessageQueueId_t Key_MessageQueue;
+extern osMessageQueueId_t Key_MessageQueue; // 引用别处定义的Key_MessageQueue
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -31,10 +31,10 @@ extern osMessageQueueId_t Key_MessageQueue;
   */
 void ScrRenewTask(void *argument)
 {
-	uint8_t keystr=0;
+	uint8_t keystr=0; // 设置局部按键变量，接住从 Key_MessageQueue 取出来的按键值
 	while(1)
 	{
-		if(osMessageQueueGet(Key_MessageQueue,&keystr,NULL,0)==osOK)
+		if(osMessageQueueGet(Key_MessageQueue,&keystr,NULL,0)==osOK) // 判断这次有没有取到消息
 		{
 			//key1 pressed
 			if(keystr == 1)

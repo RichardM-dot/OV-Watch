@@ -2,8 +2,12 @@
 /**
   ******************************************************************************
   * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
+  * @brief          : main.c 的头文件，包含应用程序的公共定义。
+  *
+  * 中文说明：
+  *   本文件由 STM32CubeMX 生成，是整工程的公共头文件，
+  *   所有外设与业务模块都会间接包含它（通过 stm32f4xx_hal.h）。
+  *   Error_Handler 是 HAL 层检测到致命错误时的统一兜底函数。
   ******************************************************************************
   * @attention
   *
@@ -20,14 +24,14 @@
 
 /* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __MAIN_H
-#define __MAIN_H
+#define __MAIN_H	// 防止头文件被重复包含
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal.h"	// STM32F4 HAL 库总头文件
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -50,6 +54,7 @@ extern "C" {
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
+/** 错误处理函数：HAL 初始化或运行出错时进入，通常在此关闭中断并死循环等待复位 */
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */

@@ -2,9 +2,28 @@
 #include "../../ui_helpers.h"
 #include "../Inc/ui_AboutPage.h"
 #include "../../../version.h"
+/*
+ * 【中文导读】ui_AboutPage.c —— 关于页（8 组“标题 + 内容”标签）
+ * ----------------------------------------------------------------------------
+ * 两列布局，逐行 25 px 步进：型号 / 固件版本 / 主控 / 操作系统 / 图形界面 /
+ * 硬件开发者 / 软件开发者 / 界面设计者。标题蓝色（0x1980E1）20 号中文，
+ * 内容 Montserrat 18。总高约 410 px，超过 280 屏幕，靠默认滚动查看。
+ * 
+ * 唯一有动态数据的是固件版本：来自 version.h 的三个函数
+ * watch_version_major/minor/patch()，拼成 "V%d.%d.%d"。
+ * 注意 str_buf 只有 8 字节，"V255.255.255" 需要 13 字节——当前版本号很小，
+ * 暂时安全，但改版本号时要留意。
+ * 
+ * 所有控件都是函数局部变量，不导出全局：本页没有交互，不需要在别处引用。
+ */
 
 ///////////////////// VARIABLES ////////////////////
 lv_obj_t * ui_AboutPage;
+/**
+ * @brief 注册到页面管理器
+ * @return 无
+ * @note 从菜单“关于”进入。
+ */
 
 ///////////////////// Page Manager //////////////////
 Page_t Page_About = {ui_AboutPage_screen_init, ui_AboutPage_screen_deinit, &ui_AboutPage};
@@ -12,6 +31,11 @@ Page_t Page_About = {ui_AboutPage_screen_init, ui_AboutPage_screen_deinit, &ui_A
 ///////////////////// FUNCTIONS ////////////////////
 
 
+/**
+ * @brief 创建关于页的 8 组标签
+ * @return 无
+ * @note 控件全部局部声明，函数返回后只由 LVGL 的对象树持有；无需 deinit。
+ */
 ///////////////////// SCREEN init ////////////////////
 void ui_AboutPage_screen_init(void)
 {
@@ -32,6 +56,7 @@ void ui_AboutPage_screen_init(void)
 		lv_obj_t * ui_AuthorGLabel;
     lv_obj_t * ui_AuthorGTextLabel;
 
+// 标题列：蓝色中文 20 号；内容列：白色英文 18 号
     ui_AboutPage = lv_obj_create(NULL);
 
     ui_NameLabel = lv_label_create(ui_AboutPage);
@@ -73,6 +98,7 @@ void ui_AboutPage_screen_init(void)
     lv_obj_set_style_text_font(ui_VersionTextLabel, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_MCULabel = lv_label_create(ui_AboutPage);
+// 固件版本：运行时拼字符串，8 字节缓冲偏紧
     lv_obj_set_width(ui_MCULabel, LV_SIZE_CONTENT);   /// 1
     lv_obj_set_height(ui_MCULabel, LV_SIZE_CONTENT);    /// 1
     lv_obj_set_x(ui_MCULabel, 20);
@@ -152,6 +178,7 @@ void ui_AboutPage_screen_init(void)
     lv_label_set_text(ui_AuthorSLabel, "软件开发者");
     lv_obj_set_style_text_color(ui_AuthorSLabel, lv_color_hex(0x1980E1), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(ui_AuthorSLabel, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+// 最后三组是开发者署名，纵向已超出屏幕，需要滚动
     lv_obj_set_style_text_font(ui_AuthorSLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_AuthorSTextLabel = lv_label_create(ui_AboutPage);
@@ -183,6 +210,11 @@ void ui_AboutPage_screen_init(void)
 }
 
 //////////////////// SCREEN Deinit ////////////////////
+/**
+ * @brief 关于页销毁：空实现
+ * @return 无
+ * @note 无定时器、无堆资源；控件随 screen 释放。
+ */
 void ui_AboutPage_screen_deinit(void)
 {
 

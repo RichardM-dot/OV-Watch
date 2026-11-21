@@ -15,8 +15,27 @@
 #include "../Inc/ui_GameSelectPage.h"
 #include "../Inc/ui_SetPage.h"
 #include "../Inc/ui_AboutPage.h"
+/*
+ * 【中文导读】ui_MenuPage.c —— 应用列表页（12 个入口的“抽屉”）
+ * ----------------------------------------------------------------------------
+ * 菜单页是一个 240 宽、总高约 840 的纵向滚动容器：每项 70 高，由
+ * Panel（透明容器，按下变灰）+ Button（40x40 圆角图标）+ Label（中文名）三层组成。
+ * 因为一屏只有 280 高，所以必须靠 LVGL 的纵向滚动浏览；滚动位置在 SCROLL_END
+ * 时存进 ui_MenuScrollY，回到菜单页时再 scroll_to 还原，避免每次都跳回顶部。
+ * 
+ * 每个 Panel 的点击回调都以 #if XXX_PAGE_EN 包裹：页面裁剪在编译期完成，
+ * 关掉的页面既不占 Flash 也不会误跳转（例如“运动”页当前是空实现）。
+ * 
+ * 导航关系：首页右滑/点击进入菜单；菜单右滑 Page_Back() 回首页；
+ * 点击条目 Page_Load(&Page_Xxx) 入栈。页面栈由 Func/Src/PageManager.c 维护。
+ */
 
 
+/**
+ * @brief 把菜单页注册进页面管理器
+ * @return 无
+ * @note Page_t 第三成员是屏幕对象地址；init 由 Page_Load/Page_Back 调用。
+ */
 ///////////////////// Page Manager //////////////////
 Page_t Page_Menu = {ui_MenuPage_screen_init, ui_MenuPage_screen_deinit, &ui_MenuPage};
 
@@ -85,11 +104,18 @@ lv_obj_t * ui_MenuAbicon;
 lv_obj_t * ui_MenuAbLabel;
 
 
+// 记住的纵向滚动偏移（像素）；首页 init 时会把它清零
 //scroll y
 int16_t ui_MenuScrollY = 0;
 
 
 ///////////////////// FUNCTIONS ////////////////////
+/**
+ * @brief 菜单页全局事件：右滑返回 + 记录滚动位置
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note LV_EVENT_SCROLL_END 在惯性滚动停止后才触发，避免拖动过程中频繁写变量。
+ */
 void ui_event_MenuPage(lv_event_t * e)
 {
    lv_event_code_t event_code = lv_event_get_code(e);
@@ -109,6 +135,12 @@ void ui_event_MenuPage(lv_event_t * e)
 }
 
 
+/**
+ * @brief 日历入口：点击进入日历页
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note CALENDAR_PAGE_EN 为 0 时整段被预处理器删掉。
+ */
 void ui_event_MenuCalPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -124,6 +156,11 @@ void ui_event_MenuCalPanel(lv_event_t * e)
 	}
 }
 
+/**
+ * @brief 计算器入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuComPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -140,6 +177,11 @@ void ui_event_MenuComPanel(lv_event_t * e)
 	}
 }
 
+/**
+ * @brief 秒表入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuTimPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -155,6 +197,11 @@ void ui_event_MenuTimPanel(lv_event_t * e)
 	}
 }
 
+/**
+ * @brief 卡包（NFC 卡）入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuCardPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -171,6 +218,12 @@ void ui_event_MenuCardPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 运动入口（当前空实现）
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note SPROTS_PAGE_EN 打开时 #if 分支为空，点击无反应——属于未完成功能。
+ */
 void ui_event_MenuSprPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -186,6 +239,12 @@ void ui_event_MenuSprPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 心率入口
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 进页后由 HRPage 自己的定时器触发 EM7028 采样，这里不发消息。
+ */
 void ui_event_MenuHRPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -203,6 +262,11 @@ void ui_event_MenuHRPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 血氧入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuO2Panel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -218,6 +282,11 @@ void ui_event_MenuO2Panel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 环境（温湿度/气压）入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuEnvPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -233,6 +302,11 @@ void ui_event_MenuEnvPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 指南针入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuCPPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -248,6 +322,11 @@ void ui_event_MenuCPPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 游戏入口：先进游戏选择页
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuGamePanel(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -264,6 +343,11 @@ void ui_event_MenuGamePanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 设置入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuSetPanel(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -280,6 +364,11 @@ void ui_event_MenuSetPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 关于入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_MenuAbPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -295,11 +384,27 @@ void ui_event_MenuAbPanel(lv_event_t * e)
     }
 }
 
+/*
+ * 创建菜单页控件树
+ * 12 个 Panel 依次排在 y=0,70,140,...,770，每个都是 240x70：
+ *   Panel  透明背景 + PRESSED 态灰色高亮（点击反馈）
+ *    └ Button 40x40 圆形，颜色区分功能类别
+ *       └ Label 图标（iconfont 私有码位）
+ *    └ Label  中文名（Cuyuan 20 号字，左对齐、x=60）
+ * Panel 本身不设 CLICKABLE 清除，因此点击落在 Panel 上而不是 Button；
+ * Button 反而被 clear_flag(CLICKABLE)，这样做是为了让整行都可点。
+ */
 ///////////////////// SCREEN init ////////////////////
+/**
+ * @brief 创建 12 个菜单项、绑定点击回调并恢复上次滚动位置
+ * @return 无
+ * @note 无参数；每次进入菜单页都会重建全部控件，故滚动位置必须显式还原。
+ */
 void ui_MenuPage_screen_init(void)
 {
     ui_MenuPage = lv_obj_create(NULL);
 
+// 日历项：y=0；Panel 透明，只有按下态才出现灰色背景
     ui_MenuCalPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuCalPanel, 240);
     lv_obj_set_height(ui_MenuCalPanel, 70);
@@ -339,6 +444,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuCalLabel, "日 历");
     lv_obj_set_style_text_font(ui_MenuCalLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 计算器项：y=70
     ui_MenuComPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuComPanel, 240);
     lv_obj_set_height(ui_MenuComPanel, 70);
@@ -380,6 +486,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuComLabel, "计 算 器");
     lv_obj_set_style_text_font(ui_MenuComLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 秒表项：y=140
     ui_MenuTimPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuTimPanel, 240);
     lv_obj_set_height(ui_MenuTimPanel, 70);
@@ -421,6 +528,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuTimLabel, "秒 表");
     lv_obj_set_style_text_font(ui_MenuTimLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 卡包项：y=210
     ui_MenuCardPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuCardPanel, 240);
     lv_obj_set_height(ui_MenuCardPanel, 70);
@@ -462,6 +570,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuCardLabel, "卡 包");
     lv_obj_set_style_text_font(ui_MenuCardLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 运动项：y=280（功能未实现）
     ui_MenuSprPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuSprPanel, 240);
     lv_obj_set_height(ui_MenuSprPanel, 70);
@@ -503,6 +612,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuSprLabel, "运 动");
     lv_obj_set_style_text_font(ui_MenuSprLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 心率项：y=350
     ui_MenuHRPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuHRPanel, 240);
     lv_obj_set_height(ui_MenuHRPanel, 70);
@@ -544,6 +654,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuHRLabel, "心 率");
     lv_obj_set_style_text_font(ui_MenuHRLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 血氧项：y=420
     ui_MenuO2Panel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuO2Panel, 240);
     lv_obj_set_height(ui_MenuO2Panel, 70);
@@ -587,6 +698,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuO2Label, "血 氧");
     lv_obj_set_style_text_font(ui_MenuO2Label, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 环境项：y=490
     ui_MenuEnvPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuEnvPanel, 240);
     lv_obj_set_height(ui_MenuEnvPanel, 70);
@@ -628,6 +740,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuEnvLabel, "环 境");
     lv_obj_set_style_text_font(ui_MenuEnvLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 指南针项：y=560
     ui_MenuCPPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuCPPanel, 240);
     lv_obj_set_height(ui_MenuCPPanel, 70);
@@ -669,6 +782,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuCPLabel, "指 南 针");
     lv_obj_set_style_text_font(ui_MenuCPLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 游戏项：y=630
     ui_MenuGamePanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuGamePanel, 240);
     lv_obj_set_height(ui_MenuGamePanel, 70);
@@ -711,6 +825,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuGameLabel, "游 戏");
     lv_obj_set_style_text_font(ui_MenuGameLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 设置项：y=700
     ui_MenuSetPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuSetPanel, 240);
     lv_obj_set_height(ui_MenuSetPanel, 70);
@@ -752,6 +867,7 @@ void ui_MenuPage_screen_init(void)
     lv_label_set_text(ui_MenuSetLabel, "设 置");
     lv_obj_set_style_text_font(ui_MenuSetLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 关于项：y=770；总高 840 > 280，必须滚动
     ui_MenuAbPanel = lv_obj_create(ui_MenuPage);
     lv_obj_set_width(ui_MenuAbPanel, 240);
     lv_obj_set_height(ui_MenuAbPanel, 70);
@@ -795,9 +911,11 @@ void ui_MenuPage_screen_init(void)
 
 
 	//scroll back
+// 还原滚动偏移：LV_ANIM_OFF，避免进页时看到一段滚动动画
 	lv_obj_scroll_to(ui_MenuPage,0,ui_MenuScrollY,LV_ANIM_OFF);
 
 	//events
+// 事件绑定：Panel 接 CLICKED，Page 接 GESTURE/SCROLL_END
 	lv_obj_add_event_cb(ui_MenuPage, ui_event_MenuPage, LV_EVENT_ALL, NULL);
 	lv_obj_add_event_cb(ui_MenuCalPanel, ui_event_MenuCalPanel, LV_EVENT_ALL, NULL);
 	lv_obj_add_event_cb(ui_MenuComPanel, ui_event_MenuComPanel, LV_EVENT_ALL, NULL);
@@ -816,5 +934,10 @@ void ui_MenuPage_screen_init(void)
 }
 
 /////////////////// SCREEN deinit ////////////////////
+/**
+ * @brief 菜单页销毁：空实现
+ * @return 无
+ * @note 控件随 screen 一起被 LVGL 删除，没有定时器或堆内存需要手动释放。
+ */
 void ui_MenuPage_screen_deinit(void)
 {}

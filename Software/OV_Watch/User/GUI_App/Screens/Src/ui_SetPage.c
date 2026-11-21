@@ -7,8 +7,25 @@
 #include "../Inc/ui_DateTimeSetPage.h"
 
 #include "../../../Func/Inc/HWDataAccess.h"
+/*
+ * 【中文导读】ui_SetPage.c —— 设置页（5 个条目 + 1 个开关）
+ * ----------------------------------------------------------------------------
+ * 自上而下 5 行，每行 70 高，正好一屏（280）不用滚动：
+ *   常亮时间 → Page_LOffTimeSet   熄屏时间 → Page_TOffTimeSet
+ *   时间日期 → Page_DateTimeSet   抬腕亮屏 → 开关（直连 IMU）
+ *   密码设置 → 回调为空（未实现）
+ * 
+ * 抬腕开关是本页唯一的“有状态”控件：打开时调 HWInterface.IMU.WristEnable()，
+ * 关闭时调 WristDisable()；页面重建时读 HWInterface.IMU.wrist_is_enabled 恢复勾选态。
+ * 其余条目都只是 Page_Load 入栈，真正的设置在各自的子页里完成。
+ */
 
 ///////////////////// Page Manager //////////////////
+/**
+ * @brief 把设置页注册进页面管理器
+ * @return 无
+ * @note Page_t 统一由 Page_Load/Page_Back 调度。
+ */
 Page_t Page_Set = {ui_SetPage_screen_init, ui_SetPage_screen_deinit, &ui_SetPage};
 
 ///////////////////// VARIABLES ////////////////////
@@ -39,6 +56,12 @@ lv_obj_t * ui_PasswordLabel;
 
 
 ///////////////////// FUNCTIONS ////////////////////
+/**
+ * @brief 设置页全局事件：右滑返回上一页
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 下方注释块是早期手写页面栈的残留实现，已被 PageManager 取代。
+ */
 void ui_event_SetPage(lv_event_t * e)
 {
    lv_event_code_t event_code = lv_event_get_code(e);
@@ -64,6 +87,12 @@ void ui_event_SetPage(lv_event_t * e)
 		}
 }
 
+/**
+ * @brief 常亮时间入口
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note Page_LOffTimeSet 定义在 ui_OffTimePage.c，与熄屏时间共用一套滚轮 UI。
+ */
 void ui_event_LightTimePanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -74,6 +103,11 @@ void ui_event_LightTimePanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 熄屏时间入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_TOffTimePanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -84,6 +118,12 @@ void ui_event_TOffTimePanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 抬腕亮屏开关：按勾选态启停 IMU 抬腕检测
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 只处理 VALUE_CHANGED；开关状态本身由 LVGL 维护，业务侧只发命令。
+ */
 void ui_event_WristSwitch(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
@@ -103,6 +143,11 @@ void ui_event_WristSwitch(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 时间日期设置入口
+ * @param e LVGL 事件对象
+ * @return 无
+ */
 void ui_event_DateTimeSetPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -113,6 +158,12 @@ void ui_event_DateTimeSetPanel(lv_event_t * e)
     }
 }
 
+/**
+ * @brief 密码设置入口：空实现
+ * @param e LVGL 事件对象
+ * @return 无
+ * @note 面板可点击但无任何动作，属于占位功能。
+ */
 void ui_event_PasswordPanel(lv_event_t * e)
 {
 	lv_event_code_t event_code = lv_event_get_code(e);
@@ -124,11 +175,24 @@ void ui_event_PasswordPanel(lv_event_t * e)
 }
 
 
+/*
+ * 创建设置页控件树
+ * 5 个 Panel 依次位于 y=0/70/140/210/280，均为 240x70 透明容器：
+ *   Panel（PRESSED 态灰底）→ Button（40x40 圆角纯色）+ Label（中文项名）
+ * 第 4 行额外挂一个 lv_switch（55x25，右对齐）用于抬腕开关。
+ * 注意 Panel 保留 CLICKABLE、Button 反而清除 CLICKABLE，使整行都能点。
+ */
 ///////////////////// SCREEN init ////////////////////
+/**
+ * @brief 创建设置页全部控件并绑定事件
+ * @return 无
+ * @note 无参数；重复调用会重复建控件，必须由 PageManager 保证单次。
+ */
 void ui_SetPage_screen_init(void)
 {
     ui_SetPage = lv_obj_create(NULL);
 
+// 第 1 行：常亮时间（蓝）
     ui_LightTimePanel = lv_obj_create(ui_SetPage);
     lv_obj_set_width(ui_LightTimePanel, 240);
     lv_obj_set_height(ui_LightTimePanel, 70);
@@ -167,6 +231,7 @@ void ui_SetPage_screen_init(void)
     lv_label_set_text(ui_LightTimeLabel, "常亮时间");
     lv_obj_set_style_text_font(ui_LightTimeLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 第 2 行：熄屏时间（橙）
     ui_TurnOffTimePanel = lv_obj_create(ui_SetPage);
     lv_obj_set_width(ui_TurnOffTimePanel, 240);
     lv_obj_set_height(ui_TurnOffTimePanel, 70);
@@ -207,6 +272,7 @@ void ui_SetPage_screen_init(void)
     lv_label_set_text(ui_TOffTimeLabel, "熄屏时间");
     lv_obj_set_style_text_font(ui_TOffTimeLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 第 3 行：时间日期（蓝）
     ui_DateTimeSetPanel = lv_obj_create(ui_SetPage);
     lv_obj_set_width(ui_DateTimeSetPanel, 240);
     lv_obj_set_height(ui_DateTimeSetPanel, 70);
@@ -247,6 +313,7 @@ void ui_SetPage_screen_init(void)
     lv_label_set_text(ui_DateTimeSetLabel, "时间日期");
     lv_obj_set_style_text_font(ui_DateTimeSetLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+// 第 4 行：抬腕亮屏（紫），右侧带开关
     ui_WristPanel = lv_obj_create(ui_SetPage);
     lv_obj_set_width(ui_WristPanel, 240);
     lv_obj_set_height(ui_WristPanel, 70);
@@ -290,9 +357,11 @@ void ui_SetPage_screen_init(void)
     lv_obj_set_height(ui_WristSwitch, 25);
     lv_obj_set_align(ui_WristSwitch, LV_ALIGN_RIGHT_MID);
 
+// 按 IMU 当前状态恢复开关外观，避免重建后显示与实际相反
 		if(HWInterface.IMU.wrist_is_enabled)
 		{lv_obj_add_state(ui_WristSwitch, LV_STATE_CHECKED);}
 
+// 第 5 行：密码设置（橙，占位）
     ui_PasswordPanel = lv_obj_create(ui_SetPage);
     lv_obj_set_width(ui_PasswordPanel, 240);
     lv_obj_set_height(ui_PasswordPanel, 70);
@@ -334,6 +403,7 @@ void ui_SetPage_screen_init(void)
     lv_obj_set_style_text_font(ui_PasswordLabel, &ui_font_Cuyuan20, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     //events
+// 事件绑定：Panel 接点击，Switch 接 VALUE_CHANGED
 		lv_obj_add_event_cb(ui_SetPage, ui_event_SetPage, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_LightTimePanel, ui_event_LightTimePanel, LV_EVENT_ALL, NULL);
     lv_obj_add_event_cb(ui_TurnOffTimePanel, ui_event_TOffTimePanel, LV_EVENT_ALL, NULL);
@@ -344,5 +414,10 @@ void ui_SetPage_screen_init(void)
 }
 
 /////////////////// SCREEN deinit ////////////////////
+/**
+ * @brief 设置页销毁：空实现
+ * @return 无
+ * @note 无定时器、无堆资源；控件随 screen 一起释放。
+ */
 void ui_SetPage_screen_deinit(void)
 {}
